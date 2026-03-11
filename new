@@ -1,0 +1,2291 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- Responsive Sidebar Logic ---
+    const sidebar = document.getElementById('sidebar');
+    const openSidebarBtn = document.getElementById('openSidebar');
+    const closeSidebarBtn = document.getElementById('closeSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleSidebar() {
+        sidebar.classList.toggle('open');
+        sidebarOverlay.classList.toggle('active');
+    }
+
+    if (openSidebarBtn) openSidebarBtn.addEventListener('click', toggleSidebar);
+    if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', toggleSidebar);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleSidebar);
+
+    // --- Navigation Logic ---
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view');
+    
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            // Update active nav state
+            navItems.forEach(nav => nav.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Switch view
+            const targetId = item.getAttribute('data-target');
+            views.forEach(view => {
+                view.classList.remove('active');
+                if(view.id === targetId) {
+                    view.classList.add('active');
+                }
+            });
+
+            // Close sidebar on mobile after clicking a link
+            if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('open')) {
+                toggleSidebar();
+            }
+        });
+    });
+
+    // --- Planner Tabs Logic (Weekly vs Daily) ---
+    const plannerTabs = document.querySelectorAll('.tab-btn');
+    const planningViews = document.querySelectorAll('.planning-tab');
+    
+    plannerTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            plannerTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            const targetTab = tab.getAttribute('data-tab') + '-tab';
+            planningViews.forEach(view => {
+                view.classList.remove('active');
+                if(view.id === targetTab) {
+                    view.classList.add('active');
+                }
+            });
+        });
+    });
+
+    // --- Generate 2026 Calendar ---
+    const calendarGrid = document.getElementById('yearly-calendar');
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const daysInMonth2026 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    // In 2026, Jan 1 is a Thursday (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)
+    let firstDayOffset = 4; 
+
+    months.forEach((month, index) => {
+        const monthCard = document.createElement('div');
+        monthCard.className = 'month-card';
+        
+        let html = `<div class="month-title"><span>${month}</span></div>`;
+        html += `<div class="month-days">`;
+        
+        // Day headers
+        const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        dayNames.forEach(day => {
+            html += `<div class="day-header">${day}</div>`;
+        });
+
+        // Blank days for offset
+        for(let i=0; i < firstDayOffset; i++){
+            html += `<div class="day-cell empty"></div>`;
+        }
+
+        // Output days
+        const days = daysInMonth2026[index];
+        for(let day=1; day <= days; day++) {
+             html += `<div class="day-cell" onclick="jumpToDate('${month} ${day}, 2026')">${day}</div>`;
+        }
+        
+        // Calculate offset for next month
+        firstDayOffset = (firstDayOffset + days) % 7; 
+
+        html += `</div>`;
+        monthCard.innerHTML = html;
+        calendarGrid.appendChild(monthCard);
+    });
+
+    // --- Local Storage / Persistence System ---
+    
+    window.currentWeekStr = "Jan 5 - Jan 11";
+    window.currentDayStr = "Monday, Jan 5, 2026";
+
+    function getScope(el) {
+        if (el.closest('#weekly-tab')) return `week_${window.currentWeekStr}`;
+        if (el.closest('#daily-tab')) return `day_${window.currentDayStr}`;
+        return 'global';
+    }
+
+    // Auto-save function for contenteditable elements
+    function setupAutoSave() {
+        const editables = document.querySelectorAll('[contenteditable="true"]');
+        const inputs = document.querySelectorAll('input[type="text"], textarea');
+        
+        let editCounter = 0;
+        editables.forEach((el) => {
+            let savedId = el.getAttribute('data-save-id');
+            if (!savedId) {
+                savedId = `edit_${editCounter}`;
+                editCounter++;
+                el.setAttribute('data-save-id', savedId);
+            }
+            
+            el.addEventListener('input', () => {
+                setTimeout(() => {
+                    let scope = getScope(el);
+                    localStorage.setItem(`planner_${scope}_${savedId}`, el.innerHTML);
+                }, 500); 
+            });
+        });
+
+        let inputCounter = 0;
+        inputs.forEach((el) => {
+            if (el.closest('.tracker-table') || el.closest('.habit-row')) return;
+            
+            let savedId = el.getAttribute('data-save-id');
+            if (!savedId) {
+                savedId = `input_${inputCounter}`;
+                inputCounter++;
+                el.setAttribute('data-save-id', savedId);
+            }
+            
+            el.addEventListener('input', () => {
+                setTimeout(() => {
+                    let scope = getScope(el);
+                    localStorage.setItem(`planner_${scope}_${savedId}`, el.value);
+                }, 500);
+            });
+        });
+        
+        window.loadPlannerData();
+    }
+
+    window.loadPlannerData = function() {
+        const editables = document.querySelectorAll('[contenteditable="true"]');
+        const inputs = document.querySelectorAll('input[type="text"], textarea');
+        
+        editables.forEach((el) => {
+            let savedId = el.getAttribute('data-save-id');
+            let scope = getScope(el);
+            const saved = localStorage.getItem(`planner_${scope}_${savedId}`);
+            if (saved !== null) {
+                el.innerHTML = saved;
+            } else if (scope !== 'global') {
+                el.innerHTML = '';
+            }
+        });
+        
+        inputs.forEach((el) => {
+            if (el.closest('.tracker-table') || el.closest('.habit-row')) return;
+            
+            let savedId = el.getAttribute('data-save-id');
+            let scope = getScope(el);
+            const saved = localStorage.getItem(`planner_${scope}_${savedId}`);
+            if (saved !== null) {
+                el.value = saved;
+            } else if (scope !== 'global') {
+                el.value = '';
+            }
+        });
+    }
+
+    setupAutoSave();
+
+    // --- Weekly Navigation Logic ---
+    let currentWeeklyDate = new Date(2026, 0, 5); // Monday Jan 5
+    const weekDisplay = document.querySelector('.current-week');
+    const weekBtns = document.querySelectorAll('.weekly-header .icon-btn');
+    
+    function updateWeeklyDisplay() {
+        const start = new Date(currentWeeklyDate);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        
+        const options = { month: 'short', day: 'numeric' };
+        window.currentWeekStr = `${start.toLocaleDateString('en-US', options)} - ${end.toLocaleDateString('en-US', options)}`;
+        weekDisplay.innerText = window.currentWeekStr;
+        
+        window.loadPlannerData();
+    }
+
+    if (weekBtns.length >= 2) {
+        weekBtns[0].addEventListener('click', () => {
+            currentWeeklyDate.setDate(currentWeeklyDate.getDate() - 7);
+            updateWeeklyDisplay();
+        });
+        weekBtns[1].addEventListener('click', () => {
+            currentWeeklyDate.setDate(currentWeeklyDate.getDate() + 7);
+            updateWeeklyDisplay();
+        });
+    }
+
+    // Load dynamic tracker tables from LocalStorage
+    loadDynamicTable('exam-list', 'tracker_exams');
+    loadDynamicTable('assignment-list', 'tracker_assignments');
+    loadHabits();
+
+});
+
+// --- Dynamic Table Functions (Exams & Assignments) ---
+
+function addExamRow(data = ['', '', '', '', '']) {
+    const list = document.getElementById('exam-list');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" placeholder="Course" value="${data[0]}" oninput="saveDynamicTable('exam-list', 'tracker_exams')"></td>
+        <td><input type="text" placeholder="Midterm/Final" value="${data[1]}" oninput="saveDynamicTable('exam-list', 'tracker_exams')"></td>
+        <td><input type="text" placeholder="Date & Time" value="${data[2]}" oninput="saveDynamicTable('exam-list', 'tracker_exams')"></td>
+        <td><input type="text" placeholder="Goal" value="${data[3]}" oninput="saveDynamicTable('exam-list', 'tracker_exams')"></td>
+        <td><input type="text" placeholder="Status" value="${data[4]}" oninput="saveDynamicTable('exam-list', 'tracker_exams')"></td>
+    `;
+    list.appendChild(tr);
+    saveDynamicTable('exam-list', 'tracker_exams');
+}
+
+function addAssignmentRow(data = ['', '', '', '', '']) {
+    const list = document.getElementById('assignment-list');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input type="text" placeholder="Course" value="${data[0]}" oninput="saveDynamicTable('assignment-list', 'tracker_assignments')"></td>
+        <td><input type="text" placeholder="Task Name" value="${data[1]}" oninput="saveDynamicTable('assignment-list', 'tracker_assignments')"></td>
+        <td><input type="text" placeholder="Due Date" value="${data[2]}" oninput="saveDynamicTable('assignment-list', 'tracker_assignments')"></td>
+        <td><input type="text" placeholder="0%" value="${data[3]}" oninput="saveDynamicTable('assignment-list', 'tracker_assignments')"></td>
+        <td><input type="text" placeholder="Not Started" value="${data[4]}" oninput="saveDynamicTable('assignment-list', 'tracker_assignments')"></td>
+    `;
+    list.appendChild(tr);
+    saveDynamicTable('assignment-list', 'tracker_assignments');
+}
+
+function saveDynamicTable(listId, storageKey) {
+    const tbody = document.getElementById(listId);
+    const rows = tbody.querySelectorAll('tr');
+    const tableData = [];
+    
+    rows.forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const rowData = Array.from(inputs).map(inp => inp.value);
+        tableData.push(rowData);
+    });
+    
+    localStorage.setItem(storageKey, JSON.stringify(tableData));
+}
+
+function loadDynamicTable(listId, storageKey) {
+    const data = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    if(data.length === 0) {
+        // Add 3 default rows if empty
+        if(listId === 'exam-list') { addExamRow(); addExamRow(); addExamRow(); }
+        if(listId === 'assignment-list') { addAssignmentRow(); addAssignmentRow(); addAssignmentRow(); }
+        return;
+    }
+    
+    data.forEach(rowData => {
+        if(listId === 'exam-list') addExamRow(rowData);
+        if(listId === 'assignment-list') addAssignmentRow(rowData);
+    });
+}
+
+// --- Habit Tracker Specific ---
+let habitsData = JSON.parse(localStorage.getItem('tracker_habits') || '[]');
+
+function addHabit(name = "New Habit", days = Array(31).fill(false)) {
+    const container = document.getElementById('habit-container');
+    const habitIndex = container.children.length; // acts as ID
+    
+    const div = document.createElement('div');
+    div.className = 'habit-row';
+    
+    let daysHtml = '';
+    for(let i=0; i<31; i++) {
+        const isDone = days[i] ? 'done' : '';
+        daysHtml += `<div class="habit-day ${isDone}" onclick="toggleHabitDay(${habitIndex}, ${i}, this)"></div>`;
+    }
+
+    div.innerHTML = `
+        <div class="habit-name">
+            <input type="text" value="${name}" oninput="updateHabitName(${habitIndex}, this.value)">
+        </div>
+        <div class="habit-days">
+            ${daysHtml}
+        </div>
+    `;
+    container.appendChild(div);
+    
+    // Save to array if new
+    if(habitsData.length <= habitIndex) {
+        habitsData.push({name: name, days: days});
+        saveHabits();
+    }
+}
+
+function toggleHabitDay(habitIndex, dayIndex, el) {
+    el.classList.toggle('done');
+    habitsData[habitIndex].days[dayIndex] = el.classList.contains('done');
+    saveHabits();
+}
+
+function updateHabitName(habitIndex, name) {
+    habitsData[habitIndex].name = name;
+    saveHabits();
+}
+
+function saveHabits() {
+    localStorage.setItem('tracker_habits', JSON.stringify(habitsData));
+}
+
+function loadHabits() {
+    if(habitsData.length === 0) {
+        // Defaults
+        addHabit("Drink Water (8 cups)");
+        addHabit("Read 20 pages");
+        addHabit("Study 2 Hours");
+    } else {
+        // Create rows avoiding duplication pushes from addHabit by clearing DOM
+        document.getElementById('habit-container').innerHTML = '';
+        const dataCopy = [...habitsData]; 
+        dataCopy.forEach(h => {
+             addHabit(h.name, h.days);
+        });
+    }
+}
+
+// --- Helper Functions ---
+function jumpToDate(dateStr) {
+    // Switch to planner view daily tab, update header
+    const navPlanner = document.querySelector('.nav-item[data-target="planner"]');
+    if (navPlanner) navPlanner.click();
+    
+    const tabDaily = document.querySelector('.tab-btn[data-tab="daily"]');
+    if (tabDaily) tabDaily.click();
+    
+    const dayElement = document.querySelector('.current-day');
+    if (dayElement) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            const options = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' };
+            const fullDateStr = d.toLocaleDateString('en-US', options);
+            dayElement.innerText = fullDateStr;
+            window.currentDayStr = fullDateStr;
+            
+            if (window.loadPlannerData) {
+                window.loadPlannerData();
+            }
+        } else {
+            dayElement.innerText = dateStr;
+            window.currentDayStr = dateStr;
+        }
+    }
+}
+
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+}
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+# For more details on how to configure your build environment visit
+# http://www.gradle.org/docs/current/userguide/build_environment.html
+# Specifies the JVM arguments used for the daemon process.
+# The setting is particularly useful for tweaking memory settings.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+# When configured, Gradle will run in incubating parallel mode.
+# This option should only be used with decoupled projects. For more details, visit
+# https://developer.android.com/r/tools/gradle-multi-project-decoupled-projects
+# org.gradle.parallel=true
+# Kotlin code style for this project: "official" or "obsolete":
+kotlin.code.style=official
+#!/bin/sh
+
+#
+# Copyright © 2015 the original authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+##############################################################################
+#
+#   Gradle start up script for POSIX generated by Gradle.
+#
+#   Important for running:
+#
+#   (1) You need a POSIX-compliant shell to run this script. If your /bin/sh is
+#       noncompliant, but you have some other compliant shell such as ksh or
+#       bash, then to run this script, type that shell name before the whole
+#       command line, like:
+#
+#           ksh Gradle
+#
+#       Busybox and similar reduced shells will NOT work, because this script
+#       requires all of these POSIX shell features:
+#         * functions;
+#         * expansions «$var», «${var}», «${var:-default}», «${var+SET}»,
+#           «${var#prefix}», «${var%suffix}», and «$( cmd )»;
+#         * compound commands having a testable exit status, especially «case»;
+#         * various built-in commands including «command», «set», and «ulimit».
+#
+#   Important for patching:
+#
+#   (2) This script targets any POSIX shell, so it avoids extensions provided
+#       by Bash, Ksh, etc; in particular arrays are avoided.
+#
+#       The "traditional" practice of packing multiple parameters into a
+#       space-separated string is a well documented source of bugs and security
+#       problems, so this is (mostly) avoided, by progressively accumulating
+#       options in "$@", and eventually passing that to Java.
+#
+#       Where the inherited environment variables (DEFAULT_JVM_OPTS, JAVA_OPTS,
+#       and GRADLE_OPTS) rely on word-splitting, this is performed explicitly;
+#       see the in-line comments for details.
+#
+#       There are tweaks for specific operating systems such as AIX, CygWin,
+#       Darwin, MinGW, and NonStop.
+#
+#   (3) This script is generated from the Groovy template
+#       https://github.com/gradle/gradle/blob/HEAD/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
+#       within the Gradle project.
+#
+#       You can find Gradle at https://github.com/gradle/gradle/.
+#
+##############################################################################
+
+# Attempt to set APP_HOME
+
+# Resolve links: $0 may be a link
+app_path=$0
+
+# Need this for daisy-chained symlinks.
+while
+    APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
+    [ -h "$app_path" ]
+do
+    ls=$( ls -ld "$app_path" )
+    link=${ls#*' -> '}
+    case $link in             #(
+      /*)   app_path=$link ;; #(
+      *)    app_path=$APP_HOME$link ;;
+    esac
+done
+
+# This is normally unused
+# shellcheck disable=SC2034
+APP_BASE_NAME=${0##*/}
+# Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
+APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD=maximum
+
+warn () {
+    echo "$*"
+} >&2
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+} >&2
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "$( uname )" in                #(
+  CYGWIN* )         cygwin=true  ;; #(
+  Darwin* )         darwin=true  ;; #(
+  MSYS* | MINGW* )  msys=true    ;; #(
+  NONSTOP* )        nonstop=true ;;
+esac
+
+CLASSPATH="\\\"\\\""
+
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD=$JAVA_HOME/jre/sh/java
+    else
+        JAVACMD=$JAVA_HOME/bin/java
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD=java
+    if ! command -v java >/dev/null 2>&1
+    then
+        die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+fi
+
+# Increase the maximum file descriptors if we can.
+if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
+    case $MAX_FD in #(
+      max*)
+        # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        MAX_FD=$( ulimit -H -n ) ||
+            warn "Could not query maximum file descriptor limit"
+    esac
+    case $MAX_FD in  #(
+      '' | soft) :;; #(
+      *)
+        # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        ulimit -n "$MAX_FD" ||
+            warn "Could not set maximum file descriptor limit to $MAX_FD"
+    esac
+fi
+
+# Collect all arguments for the java command, stacking in reverse order:
+#   * args from the command line
+#   * the main class name
+#   * -classpath
+#   * -D...appname settings
+#   * --module-path (only if needed)
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if "$cygwin" || "$msys" ; then
+    APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+    CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
+
+    JAVACMD=$( cygpath --unix "$JAVACMD" )
+
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    for arg do
+        if
+            case $arg in                                #(
+              -*)   false ;;                            # don't mess with options #(
+              /?*)  t=${arg#/} t=/${t%%/*}              # looks like a POSIX filepath
+                    [ -e "$t" ] ;;                      #(
+              *)    false ;;
+            esac
+        then
+            arg=$( cygpath --path --ignore --mixed "$arg" )
+        fi
+        # Roll the args list around exactly as many times as the number of
+        # args, so each arg winds up back in the position where it started, but
+        # possibly modified.
+        #
+        # NB: a `for` loop captures its iteration list before it begins, so
+        # changing the positional parameters here affects neither the number of
+        # iterations, nor the values presented in `arg`.
+        shift                   # remove old arg
+        set -- "$@" "$arg"      # push replacement arg
+    done
+fi
+
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+# Collect all arguments for the java command:
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and optsEnvironmentVar are not allowed to contain shell fragments,
+#     and any embedded shellness will be escaped.
+#   * For example: A user cannot expect ${Hostname} to be expanded, as it is an environment variable and will be
+#     treated as '${Hostname}' itself on the command line.
+
+set -- \
+        "-Dorg.gradle.appname=$APP_BASE_NAME" \
+        -classpath "$CLASSPATH" \
+        -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        "$@"
+
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
+fi
+
+# Use "xargs" to parse quoted args.
+#
+# With -n1 it outputs one arg per line, with the quotes and backslashes removed.
+#
+# In Bash we could simply go:
+#
+#   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
+#   set -- "${ARGS[@]}" "$@"
+#
+# but POSIX shell has neither arrays nor command substitution, so instead we
+# post-process each arg (as a line of input to sed) to backslash-escape any
+# character that might be a shell metacharacter, then use eval to reverse
+# that process (while maintaining the separation between arguments), and wrap
+# the whole thing up as a single "set" statement.
+#
+# This will of course break if any of these variables contains a newline or
+# an unmatched quote.
+#
+
+eval "set -- $(
+        printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+        xargs -n1 |
+        sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+        tr '\n' ' '
+    )" '"$@"'
+
+exec "$JAVACMD" "$@"
+
+@rem
+@rem Copyright 2015 the original author or authors.
+@rem
+@rem Licensed under the Apache License, Version 2.0 (the "License");
+@rem you may not use this file except in compliance with the License.
+@rem You may obtain a copy of the License at
+@rem
+@rem      https://www.apache.org/licenses/LICENSE-2.0
+@rem
+@rem Unless required by applicable law or agreed to in writing, software
+@rem distributed under the License is distributed on an "AS IS" BASIS,
+@rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+@rem See the License for the specific language governing permissions and
+@rem limitations under the License.
+@rem
+@rem SPDX-License-Identifier: Apache-2.0
+@rem
+
+@if "%DEBUG%"=="" @echo off
+@rem ##########################################################################
+@rem
+@rem  Gradle startup script for Windows
+@rem
+@rem ##########################################################################
+
+@rem Set local scope for the variables with windows NT shell
+if "%OS%"=="Windows_NT" setlocal
+
+set DIRNAME=%~dp0
+if "%DIRNAME%"=="" set DIRNAME=.
+@rem This is normally unused
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+
+@rem Resolve any "." and ".." in APP_HOME to make it shorter.
+for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
+
+@rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
+
+@rem Find java.exe
+if defined JAVA_HOME goto findJavaFromJavaHome
+
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if %ERRORLEVEL% equ 0 goto execute
+
+echo. 1>&2
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH. 1>&2
+echo. 1>&2
+echo Please set the JAVA_HOME variable in your environment to match the 1>&2
+echo location of your Java installation. 1>&2
+
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+
+if exist "%JAVA_EXE%" goto execute
+
+echo. 1>&2
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME% 1>&2
+echo. 1>&2
+echo Please set the JAVA_HOME variable in your environment to match the 1>&2
+echo location of your Java installation. 1>&2
+
+goto fail
+
+:execute
+@rem Setup the command line
+
+set CLASSPATH=
+
+
+@rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
+
+:end
+@rem End local scope for the variables with windows NT shell
+if %ERRORLEVEL% equ 0 goto mainEnd
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code!
+set EXIT_CODE=%ERRORLEVEL%
+if %EXIT_CODE% equ 0 set EXIT_CODE=1
+if not ""=="%GRADLE_EXIT_CONSOLE%" exit %EXIT_CODE%
+exit /b %EXIT_CODE%
+
+:mainEnd
+if "%OS%"=="Windows_NT" endlocal
+
+:omega
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#2c3e50" rx="100"/>
+  <path d="M150 256 l50 50 l150 -150" stroke="#ffffff" stroke-width="40" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="400" font-family="sans-serif" font-size="60" fill="#ffffff" text-anchor="middle" font-weight="bold">Brightlet</text>
+</svg>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brightlet Student Success Planner 2026</title>
+    <!-- PWA Manifest & Theme Color -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <!-- Fonts: Inter (Sans-serif) & Playfair Display (Serif) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
+    <!-- Icons: Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="planner-app">
+
+        <!-- Sidebar Navigation -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="close-sidebar-btn" id="closeSidebar"><i data-feather="x"></i></button>
+                <div class="logo">
+                    <span class="logo-icon"><i data-feather="book-open"></i></span>
+                    <h1>Brightlet</h1>
+                </div>
+                <p class="subtitle">Success Planner 2026</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item active" data-target="dashboard">
+                        <i data-feather="home"></i>
+                        <span>Dashboard</span>
+                    </li>
+                    <li class="nav-item" data-target="calendar">
+                        <i data-feather="calendar"></i>
+                        <span>2026 Calendar</span>
+                    </li>
+                    <li class="nav-item" data-target="planner">
+                        <i data-feather="layout"></i>
+                        <span>Planner</span>
+                    </li>
+                    <div class="nav-divider"></div>
+                    <p class="nav-section-title">Trackers</p>
+                    <li class="nav-item" data-target="exams">
+                        <i data-feather="check-square"></i>
+                        <span>Exams</span>
+                    </li>
+                    <li class="nav-item" data-target="assignments">
+                        <i data-feather="file-text"></i>
+                        <span>Assignments</span>
+                    </li>
+                    <li class="nav-item" data-target="habits">
+                        <i data-feather="activity"></i>
+                        <span>Habit Tracker</span>
+                    </li>
+                    <div class="nav-divider"></div>
+                    <p class="nav-section-title">Growth</p>
+                    <li class="nav-item" data-target="goals">
+                        <i data-feather="target"></i>
+                        <span>Goals</span>
+                    </li>
+                    <li class="nav-item" data-target="vision">
+                        <i data-feather="image"></i>
+                        <span>Vision Board</span>
+                    </li>
+                    <li class="nav-item" data-target="notes">
+                        <i data-feather="edit-3"></i>
+                        <span>Notes</span>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="print-btn" onclick="window.print()">
+                    <i data-feather="printer"></i>
+                    Export PDF
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <div class="mobile-header">
+                <button class="menu-btn" id="openSidebar"><i data-feather="menu"></i></button>
+                <div class="logo">
+                    <span class="logo-icon"><i data-feather="book-open"></i></span>
+                    <h2>Brightlet</h2>
+                </div>
+            </div>
+
+            <!-- Dashboard View (Cover Page / Overview) -->
+            <section id="dashboard" class="view active">
+                <div class="cover-page">
+                    <div class="cover-inner">
+                        <h2 class="cover-year" contenteditable="true" data-save-id="cover_year">2026</h2>
+                        <h1 class="cover-title" contenteditable="true" data-save-id="cover_title">Brightlet Student<br>Success Planner</h1>
+                        <p class="cover-owner" contenteditable="true" data-save-id="cover_owner">Designed for distinction.</p>
+                        <div class="quick-stats">
+                            <div class="stat-card">
+                                <h3>Next Exam</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_exam_main">Midterms</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_exam_sub">in 14 days</p>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Assignments</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_asg_main">3</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_asg_sub">Due this week</p>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Habit Streak</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_habit_main">5 Days</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_habit_sub">Reading</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calendar View -->
+            <section id="calendar" class="view">
+                <header class="view-header">
+                    <h2>2026 Year at a Glance</h2>
+                    <p>Hyperlinked monthly overview</p>
+                </header>
+                <div class="calendar-grid" id="yearly-calendar">
+                    <!-- JS will populate the 12 months here -->
+                </div>
+            </section>
+
+            <!-- Planner View (Weekly & Daily Tabs) -->
+            <section id="planner" class="view">
+                <header class="view-header flex-between">
+                    <div>
+                        <h2>Planner</h2>
+                        <p>Weekly & Daily organization</p>
+                    </div>
+                    <div class="planner-tabs">
+                        <button class="tab-btn active" data-tab="weekly">Weekly</button>
+                        <button class="tab-btn" data-tab="daily">Daily</button>
+                    </div>
+                </header>
+
+                <div class="planner-content">
+                    <!-- Weekly Layout -->
+                    <div id="weekly-tab" class="planning-tab active">
+                        <div class="weekly-header">
+                            <h3>Week of <span class="current-week">Jan 5 - Jan 11</span></h3>
+                            <div class="week-controls">
+                                <button class="icon-btn"><i data-feather="chevron-left"></i></button>
+                                <button class="icon-btn"><i data-feather="chevron-right"></i></button>
+                            </div>
+                        </div>
+                        <div class="weekly-grid">
+                            <div class="day-col">
+                                <h4>Monday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Tuesday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Wednesday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Thursday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Friday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="weekend-col">
+                                <div class="day-row">
+                                    <h4>Saturday</h4>
+                                    <div class="task-slots" contenteditable="true"></div>
+                                </div>
+                                <div class="day-row">
+                                    <h4>Sunday</h4>
+                                    <div class="task-slots" contenteditable="true"></div>
+                                </div>
+                            </div>
+                            <div class="priorities-col">
+                                <h4>Top Priorities</h4>
+                                <ul class="priority-list" contenteditable="true">
+                                    <li>1. </li>
+                                    <li>2. </li>
+                                    <li>3. </li>
+                                </ul>
+                                <h4>To-Do List</h4>
+                                <ul class="todo-list" contenteditable="true">
+                                    <li>[ ] </li>
+                                    <li>[ ] </li>
+                                    <li>[ ] </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Daily Layout -->
+                    <div id="daily-tab" class="planning-tab">
+                        <div class="daily-header">
+                            <h3><span class="current-day">Monday, Jan 5, 2026</span></h3>
+                        </div>
+                        <div class="daily-grid">
+                            <div class="schedule-col">
+                                <h4>Schedule</h4>
+                                <div class="schedule-slots">
+                                    <div class="slot"><span>08:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>09:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>10:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>11:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>12:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>13:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>14:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>15:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>16:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>17:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>18:00</span><input type="text" placeholder="..."></div>
+                                </div>
+                            </div>
+                            <div class="daily-tasks-col">
+                                <h4>Must Do Today</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                                <h4>Other Tasks</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                                <h4>Notes & Reminders</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Exams View -->
+            <section id="exams" class="view">
+                <header class="view-header">
+                    <h2>Exam Tracker</h2>
+                </header>
+                <div class="tracker-table-container">
+                    <table class="tracker-table">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Exam Details</th>
+                                <th>Date & Time</th>
+                                <th>Target Grade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exam-list">
+                            <!-- JS populated rows -->
+                        </tbody>
+                    </table>
+                    <button class="add-row-btn" onclick="addExamRow()">+ Add Exam</button>
+                </div>
+            </section>
+
+            <!-- Assignments View -->
+            <section id="assignments" class="view">
+                <header class="view-header">
+                    <h2>Assignment Tracker</h2>
+                </header>
+                <div class="tracker-table-container">
+                    <table class="tracker-table">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Task/Assignment</th>
+                                <th>Due Date</th>
+                                <th>Progress</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignment-list">
+                            <!-- JS populated rows -->
+                        </tbody>
+                    </table>
+                    <button class="add-row-btn" onclick="addAssignmentRow()">+ Add Assignment</button>
+                </div>
+            </section>
+
+            <!-- Habits View -->
+            <section id="habits" class="view">
+                <header class="view-header">
+                    <h2>Habit Tracker</h2>
+                    <p>Build routines that lead to success</p>
+                </header>
+                <div class="habit-grid" id="habit-container">
+                    <!-- JS populated habits -->
+                </div>
+                <button class="add-row-btn mt-4" style="margin-top:20px;" onclick="addHabit()">+ Add New Habit</button>
+            </section>
+
+            <!-- Goals View -->
+            <section id="goals" class="view">
+                <header class="view-header">
+                    <h2>Goal Setting</h2>
+                    <p>Define your academic and personal success</p>
+                </header>
+                <div class="goals-grid">
+                    <div class="goal-box">
+                        <h3>Academic Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter academic goals...">
+                        </div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Personal Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter personal goals...">
+                        </div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Career/Future Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter career goals..."></div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Action Plan</h3>
+                        <div class="editable-content" contenteditable="true"
+                            placeholder="Steps to achieve these goals..."></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vision Board View -->
+            <section id="vision" class="view">
+                <header class="view-header">
+                    <h2>Vision Board</h2>
+                    <p>Inspiration for 2026</p>
+                </header>
+                <div class="vision-board">
+                    <div class="vision-instruction">
+                        <i data-feather="image"
+                            style="width: 48px; height: 48px; color: var(--text-light); margin-bottom:15px;"></i>
+                        <p>Click here to customize your vision board.</p>
+                        <span class="subtext">You can add images via URL in edit mode.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notes View -->
+            <section id="notes" class="view">
+                <header class="view-header">
+                    <h2>Notes</h2>
+                </header>
+                <div class="notes-container">
+                    <textarea class="notes-area" id="main-notes"
+                        placeholder="Jot down your thoughts, lecture summaries, or meeting notes here..."></textarea>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize Feather Icons
+        feather.replace();
+    </script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('SW registered with scope:', registration.scope);
+                }).catch(err => {
+                    console.error('SW registration failed:', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>
+## This file is automatically generated by Android Studio.
+# Do not modify this file -- YOUR CHANGES WILL BE ERASED!
+#
+# This file should *NOT* be checked into Version Control Systems,
+# as it contains information specific to your local configuration.
+#
+# Location of the SDK. This is only used by Gradle.
+# For customization when using a Version Control System, please read the
+# header note.
+sdk.dir=C\:\\Users\\it world\\AppData\\Local\\Android\\Sdk
+{
+  "name": "Brightlet Student Success Planner 2026",
+  "short_name": "Brightlet Planner",
+  "description": "Premium 2026 Student Digital Planner",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2c3e50",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
+pluginManagement {
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "brightlet student planner"
+include(":app")
+
+/* CSS Variables - Color Palette & Typography */
+:root {
+    /* Colors */
+    --bg-main: #FAF9F6;      /* Beige */
+    --bg-secondary: #F0EFEA; /* Slightly darker beige */
+    --bg-card: #FFFFFF;      /* White */
+    --accent: #9EB39F;       /* Muted Sage */
+    --accent-light: #C5D1C6; /* Lighter Sage */
+    --text-dark: #333333;    /* Charcoal */
+    --text-medium: #666666;  /* Medium Grey */
+    --text-light: #999999;   /* Soft Grey */
+    --border: #E5E5E5;       /* Light border */
+    
+    /* Typography */
+    --font-sans: 'Inter', sans-serif;
+    --font-serif: 'Playfair Display', serif;
+
+    /* Transitions */
+    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Print Specificity */
+@media print {
+    .sidebar { display: none !important; }
+    .main-content { margin: 0 !important; width: 100% !important; padding: 0 !important; }
+    .planner-app { height: auto !important; overflow: visible !important; }
+    body { background: white; margin: 0; padding: 0; }
+    @page { margin: 20mm; size: A4 portrait; }
+}
+
+/* Reset & Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+h1, h2, h3, h4, .serif {
+    font-family: var(--font-serif);
+    font-weight: 600;
+}
+
+/* Layout */
+.planner-app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 280px;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    z-index: 10;
+}
+
+.sidebar-header {
+    margin-bottom: 2.5rem;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent);
+}
+
+.logo h1 {
+    font-size: 1.8rem;
+    color: var(--text-dark);
+    letter-spacing: -0.5px;
+}
+
+.subtitle {
+    font-size: 0.85rem;
+    color: var(--text-medium);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 5px;
+    font-weight: 500;
+}
+
+.sidebar-nav {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.nav-list {
+    list-style: none;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 15px;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-medium);
+    transition: var(--transition);
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.nav-item:hover {
+    background-color: rgba(158, 179, 159, 0.1);
+    color: var(--text-dark);
+}
+
+.nav-item.active {
+    background-color: var(--accent);
+    color: white;
+}
+
+.nav-item i {
+    width: 18px;
+    height: 18px;
+}
+
+.nav-divider {
+    height: 1px;
+    background-color: var(--border);
+    margin: 1.5rem 0;
+}
+
+.nav-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    padding-left: 15px;
+    font-weight: 600;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 20px;
+}
+
+.print-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-dark);
+    font-weight: 500;
+    transition: var(--transition);
+    font-family: var(--font-sans);
+}
+
+.print-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.print-btn i {
+    width: 16px;
+    height: 16px;
+}
+
+/* Main Content */
+.main-content {
+    flex-grow: 1;
+    background-color: var(--bg-main);
+    overflow-y: auto;
+    padding: 3rem 4rem;
+    position: relative;
+}
+
+.view {
+    display: none;
+    animation: fadeIn 0.4s ease forwards;
+}
+
+.view.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.view-header {
+    margin-bottom: 2.5rem;
+}
+
+.view-header h2 {
+    font-size: 2.5rem;
+    color: var(--text-dark);
+    margin-bottom: 5px;
+}
+
+.view-header p {
+    color: var(--text-medium);
+    font-size: 1.1rem;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+/* Editable Elements */
+[contenteditable="true"] {
+    outline: none;
+    transition: background-color 0.2s;
+    min-height: 24px;
+}
+
+[contenteditable="true"]:hover {
+    background-color: rgba(0,0,0,0.02);
+}
+
+[contenteditable="true"]:focus {
+    background-color: rgba(255,255,255,0.8);
+    box-shadow: 0 0 0 2px var(--accent-light);
+    border-radius: 4px;
+}
+
+[contenteditable="true"]:empty:before {
+    content: attr(placeholder);
+    color: var(--text-light);
+    pointer-events: none;
+    display: block; /* For Firefox */
+}
+
+/* Dashboard / Cover Page */
+.cover-page {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+}
+
+.cover-inner {
+    text-align: center;
+    max-width: 800px;
+    padding: 4rem;
+    background-color: var(--bg-card);
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.03);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+
+.cover-inner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+
+.cover-year {
+    font-size: 5rem;
+    color: var(--accent);
+    opacity: 0.2;
+    margin-bottom: -30px;
+    font-family: var(--font-sans);
+    font-weight: 300;
+}
+
+.cover-title {
+    font-size: 4rem;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    color: var(--text-dark);
+}
+
+.cover-owner {
+    font-size: 1.2rem;
+    color: var(--text-medium);
+    margin-bottom: 3rem;
+    font-style: italic;
+    font-family: var(--font-serif);
+}
+
+.quick-stats {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-secondary);
+    padding: 1.5rem;
+    border-radius: 12px;
+    min-width: 150px;
+    border: 1px solid var(--border);
+}
+
+.stat-card h3 {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--text-medium);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.stat-main {
+    font-size: 1.5rem;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.stat-sub {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 4px;
+}
+
+/* Monthly Calendar Grid */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 2rem;
+}
+
+.month-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+}
+
+.month-title {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.month-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+}
+
+.day-header {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.day-cell {
+    font-size: 0.85rem;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.day-cell:hover:not(.empty) {
+    background-color: var(--bg-secondary);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.day-cell.empty {
+    color: transparent;
+    pointer-events: none;
+}
+
+/* Planner Tabs */
+.planner-tabs {
+    display: flex;
+    gap: 10px;
+    background: var(--bg-secondary);
+    padding: 5px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    color: var(--text-medium);
+    transition: var(--transition);
+}
+
+.tab-btn.active {
+    background: var(--bg-card);
+    color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.planning-tab {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.planning-tab.active {
+    display: block;
+}
+
+/* Weekly Planner */
+.weekly-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.weekly-header h3 {
+    font-family: var(--font-serif);
+    font-size: 1.8rem;
+    color: var(--accent);
+}
+
+.week-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.icon-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-medium);
+    transition: var(--transition);
+}
+
+.icon-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.weekly-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(150px, auto);
+    gap: 1.5rem;
+}
+
+.day-col, .weekend-col {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+
+.weekend-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.day-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.priorities-col {
+    background: var(--accent);
+    background-image: linear-gradient(135deg, var(--accent), #8CA48D);
+    color: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    grid-column: 4;
+    grid-row: 1 / span 2;
+}
+
+.priorities-col h4 {
+    color: white;
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+}
+
+.priorities-col .todo-list li {
+    border-bottom: 1px dashed rgba(255,255,255,0.2);
+}
+
+.day-col h4, .day-row h4 {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    text-transform: uppercase;
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--bg-secondary);
+}
+
+.task-slots {
+    flex-grow: 1;
+    min-height: 100px;
+    line-height: 2;
+}
+
+ul.priority-list, ul.todo-list {
+    list-style: none;
+    margin-bottom: 1.5rem;
+}
+
+ul.priority-list li, ul.todo-list li {
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+}
+
+/* Daily Planner */
+.daily-header h3 {
+    font-family: var(--font-serif);
+    font-size: 2rem;
+    color: var(--accent);
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+}
+
+.daily-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+}
+
+.schedule-col h4, .daily-tasks-col h4 {
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-medium);
+}
+
+.schedule-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.slot {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.slot span {
+    width: 60px;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    font-weight: 500;
+}
+
+.slot input {
+    flex-grow: 1;
+    border: none;
+    background: transparent;
+    padding: 12px 10px;
+    font-family: var(--font-sans);
+    color: var(--text-dark);
+    font-size: 1rem;
+    outline: none;
+}
+
+.slot input:focus {
+    background: var(--bg-card);
+}
+
+.task-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-height: 150px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    line-height: 1.8;
+}
+
+/* Trackers (Tables) */
+.tracker-table-container {
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.tracker-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tracker-table th, .tracker-table td {
+    padding: 15px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.tracker-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tracker-table td {
+    background: white;
+}
+
+.tracker-table td input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.add-row-btn {
+    width: 100%;
+    padding: 15px;
+    background: white;
+    border: none;
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    border-top: 1px solid var(--border);
+}
+
+.add-row-btn:hover {
+    background: var(--bg-secondary);
+}
+
+/* Habit Tracker Specific */
+.habit-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.habit-row {
+    display: flex;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.habit-name {
+    width: 250px;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+}
+
+.habit-name input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-dark);
+}
+
+.habit-days {
+    display: flex;
+    flex-grow: 1;
+}
+
+.habit-day {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.habit-day:last-child {
+    border-right: none;
+}
+
+.habit-day:hover {
+    background: rgba(158, 179, 159, 0.1);
+}
+
+.habit-day.done {
+    background: var(--accent);
+    color: white;
+}
+
+.habit-day.done::after {
+    content: '✓';
+    position: absolute;
+    font-weight: bold;
+}
+
+/* Goals */
+.goals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.goal-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+}
+
+.goal-box h3 {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    color: var(--accent);
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--bg-secondary);
+    padding-bottom: 0.5rem;
+}
+
+.goal-box .editable-content {
+    flex-grow: 1;
+    line-height: 1.8;
+}
+
+/* Vision Board */
+.vision-board {
+    background: var(--bg-card);
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.vision-instruction {
+    text-align: center;
+    color: var(--text-medium);
+}
+
+.vision-instruction .subtext {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-top: 10px;
+}
+
+/* Notes */
+.notes-container {
+    height: 70vh;
+}
+
+.notes-area {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    font-family: var(--font-sans);
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: var(--text-dark);
+    resize: none;
+    outline: none;
+}
+
+.notes-area:focus {
+    box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+/* Responsive Styles */
+
+/* Mobile Header */
+.mobile-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.mobile-header .logo {
+    margin: 0;
+    gap: 8px;
+    display: flex;
+    align-items: center;
+    color: var(--accent);
+}
+
+.mobile-header h2 {
+    font-size: 1.4rem;
+    color: var(--text-dark);
+    margin: 0;
+    font-family: var(--font-sans);
+    letter-spacing: -0.5px;
+}
+
+.menu-btn, .close-sidebar-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+}
+
+.close-sidebar-btn {
+    display: none;
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+}
+
+/* Overlay for mobile sidebar */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 15;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+@media (max-width: 1024px) {
+    .main-content {
+        padding: 2rem;
+    }
+    .weekly-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .priorities-col {
+        grid-column: 1 / span 2;
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .planner-app {
+        position: relative;
+    }
+    
+    .sidebar {
+        position: fixed;
+        left: -300px;
+        top: 0;
+        bottom: 0;
+        height: 100vh;
+        z-index: 20;
+        transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar.open {
+        left: 0;
+    }
+    
+    .close-sidebar-btn {
+        display: flex;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .mobile-header {
+        display: flex;
+    }
+    
+    .cover-inner {
+        padding: 2rem 1rem;
+    }
+    
+    .cover-year {
+        font-size: 3.5rem;
+    }
+    
+    .cover-title {
+        font-size: 2.2rem;
+    }
+    
+    .quick-stats {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .tab-btn {
+        padding: 6px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .weekly-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .priorities-col {
+        grid-column: 1;
+    }
+    
+    .daily-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+    
+    .goals-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .calendar-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .flex-between {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .tracker-table-container {
+        overflow-x: auto;
+    }
+    
+    .tracker-table {
+        min-width: 600px;
+    }
+
+    .habit-row {
+        flex-direction: column;
+    }
+    
+    .habit-name {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+    
+    .habit-days {
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+    
+    .habit-day {
+        min-width: 32px;
+        height: 36px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding: 1rem 0.5rem;
+    }
+    .cover-year {
+        font-size: 2.5rem;
+    }
+    .cover-title {
+        font-size: 1.8rem;
+    }
+    .view-header h2 {
+        font-size: 1.8rem;
+    }
+    .daily-header h3 {
+        font-size: 1.5rem;
+    }
+    .weekly-header h3 {
+        font-size: 1.4rem;
+    }
+    .tracker-table th, .tracker-table td {
+        padding: 10px;
+    }
+    .goal-box {
+        padding: 1.2rem;
+    }
+    .month-card {
+        padding: 1rem;
+    }
+    .habit-name {
+        width: 100%;
+    }
+}
+
+const CACHE_NAME = 'brightlet-planner-v1';
+const urlsToCache = [
+    './index.html',
+    './style.css',
+    './app.js',
+    './icon.svg',
+    './manifest.json'
+];
+
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => {
+                console.log('Opened cache');
+                return cache.addAll(urlsToCache);
+            })
+    );
+});
+
+self.addEventListener('fetch', event => {
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => {
+                // Cache hit - return response
+                if (response) {
+                    return response;
+                }
+                return fetch(event.request);
+            })
+    );
+});
+
+import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val webView = WebView(this)
+        setContentView(webView)
+
+        webView.settings.javaScriptEnabled = true
+        webView.webViewClient = WebViewClient()
+
+        webView.loadUrl("file:///android_asset/index.html")
+    }
+}
