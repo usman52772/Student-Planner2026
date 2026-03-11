@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brightlet Student Success Planner 2026</title>
+    <!-- PWA Manifest & Theme Color -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <!-- Fonts: Inter (Sans-serif) & Playfair Display (Serif) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
+    <!-- Icons: Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="planner-app">
+
+        <!-- Sidebar Navigation -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="close-sidebar-btn" id="closeSidebar"><i data-feather="x"></i></button>
+                <div class="logo">
+                    <span class="logo-icon"><i data-feather="book-open"></i></span>
+                    <h1>Brightlet</h1>
+                </div>
+                <p class="subtitle">Success Planner 2026</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item active" data-target="dashboard">
+                        <i data-feather="home"></i>
+                        <span>Dashboard</span>
+                    </li>
+                    <li class="nav-item" data-target="calendar">
+                        <i data-feather="calendar"></i>
+                        <span>2026 Calendar</span>
+                    </li>
+                    <li class="nav-item" data-target="planner">
+                        <i data-feather="layout"></i>
+                        <span>Planner</span>
+                    </li>
+                    <div class="nav-divider"></div>
+                    <p class="nav-section-title">Trackers</p>
+                    <li class="nav-item" data-target="exams">
+                        <i data-feather="check-square"></i>
+                        <span>Exams</span>
+                    </li>
+                    <li class="nav-item" data-target="assignments">
+                        <i data-feather="file-text"></i>
+                        <span>Assignments</span>
+                    </li>
+                    <li class="nav-item" data-target="habits">
+                        <i data-feather="activity"></i>
+                        <span>Habit Tracker</span>
+                    </li>
+                    <div class="nav-divider"></div>
+                    <p class="nav-section-title">Growth</p>
+                    <li class="nav-item" data-target="goals">
+                        <i data-feather="target"></i>
+                        <span>Goals</span>
+                    </li>
+                    <li class="nav-item" data-target="vision">
+                        <i data-feather="image"></i>
+                        <span>Vision Board</span>
+                    </li>
+                    <li class="nav-item" data-target="notes">
+                        <i data-feather="edit-3"></i>
+                        <span>Notes</span>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="print-btn" onclick="window.print()">
+                    <i data-feather="printer"></i>
+                    Export PDF
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <div class="mobile-header">
+                <button class="menu-btn" id="openSidebar"><i data-feather="menu"></i></button>
+                <div class="logo">
+                    <span class="logo-icon"><i data-feather="book-open"></i></span>
+                    <h2>Brightlet</h2>
+                </div>
+            </div>
+
+            <!-- Dashboard View (Cover Page / Overview) -->
+            <section id="dashboard" class="view active">
+                <div class="cover-page">
+                    <div class="cover-inner">
+                        <h2 class="cover-year" contenteditable="true" data-save-id="cover_year">2026</h2>
+                        <h1 class="cover-title" contenteditable="true" data-save-id="cover_title">Brightlet Student<br>Success Planner</h1>
+                        <p class="cover-owner" contenteditable="true" data-save-id="cover_owner">Designed for distinction.</p>
+                        <div class="quick-stats">
+                            <div class="stat-card">
+                                <h3>Next Exam</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_exam_main">Midterms</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_exam_sub">in 14 days</p>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Assignments</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_asg_main">3</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_asg_sub">Due this week</p>
+                            </div>
+                            <div class="stat-card">
+                                <h3>Habit Streak</h3>
+                                <p class="stat-main" contenteditable="true" data-save-id="stat_habit_main">5 Days</p>
+                                <p class="stat-sub" contenteditable="true" data-save-id="stat_habit_sub">Reading</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Calendar View -->
+            <section id="calendar" class="view">
+                <header class="view-header">
+                    <h2>2026 Year at a Glance</h2>
+                    <p>Hyperlinked monthly overview</p>
+                </header>
+                <div class="calendar-grid" id="yearly-calendar">
+                    <!-- JS will populate the 12 months here -->
+                </div>
+            </section>
+
+            <!-- Planner View (Weekly & Daily Tabs) -->
+            <section id="planner" class="view">
+                <header class="view-header flex-between">
+                    <div>
+                        <h2>Planner</h2>
+                        <p>Weekly & Daily organization</p>
+                    </div>
+                    <div class="planner-tabs">
+                        <button class="tab-btn active" data-tab="weekly">Weekly</button>
+                        <button class="tab-btn" data-tab="daily">Daily</button>
+                    </div>
+                </header>
+
+                <div class="planner-content">
+                    <!-- Weekly Layout -->
+                    <div id="weekly-tab" class="planning-tab active">
+                        <div class="weekly-header">
+                            <h3>Week of <span class="current-week">Jan 5 - Jan 11</span></h3>
+                            <div class="week-controls">
+                                <button class="icon-btn"><i data-feather="chevron-left"></i></button>
+                                <button class="icon-btn"><i data-feather="chevron-right"></i></button>
+                            </div>
+                        </div>
+                        <div class="weekly-grid">
+                            <div class="day-col">
+                                <h4>Monday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Tuesday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Wednesday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Thursday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="day-col">
+                                <h4>Friday</h4>
+                                <div class="task-slots" contenteditable="true"></div>
+                            </div>
+                            <div class="weekend-col">
+                                <div class="day-row">
+                                    <h4>Saturday</h4>
+                                    <div class="task-slots" contenteditable="true"></div>
+                                </div>
+                                <div class="day-row">
+                                    <h4>Sunday</h4>
+                                    <div class="task-slots" contenteditable="true"></div>
+                                </div>
+                            </div>
+                            <div class="priorities-col">
+                                <h4>Top Priorities</h4>
+                                <ul class="priority-list" contenteditable="true">
+                                    <li>1. </li>
+                                    <li>2. </li>
+                                    <li>3. </li>
+                                </ul>
+                                <h4>To-Do List</h4>
+                                <ul class="todo-list" contenteditable="true">
+                                    <li>[ ] </li>
+                                    <li>[ ] </li>
+                                    <li>[ ] </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Daily Layout -->
+                    <div id="daily-tab" class="planning-tab">
+                        <div class="daily-header">
+                            <h3><span class="current-day">Monday, Jan 5, 2026</span></h3>
+                        </div>
+                        <div class="daily-grid">
+                            <div class="schedule-col">
+                                <h4>Schedule</h4>
+                                <div class="schedule-slots">
+                                    <div class="slot"><span>08:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>09:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>10:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>11:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>12:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>13:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>14:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>15:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>16:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>17:00</span><input type="text" placeholder="..."></div>
+                                    <div class="slot"><span>18:00</span><input type="text" placeholder="..."></div>
+                                </div>
+                            </div>
+                            <div class="daily-tasks-col">
+                                <h4>Must Do Today</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                                <h4>Other Tasks</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                                <h4>Notes & Reminders</h4>
+                                <div class="task-block" contenteditable="true"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Exams View -->
+            <section id="exams" class="view">
+                <header class="view-header">
+                    <h2>Exam Tracker</h2>
+                </header>
+                <div class="tracker-table-container">
+                    <table class="tracker-table">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Exam Details</th>
+                                <th>Date & Time</th>
+                                <th>Target Grade</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exam-list">
+                            <!-- JS populated rows -->
+                        </tbody>
+                    </table>
+                    <button class="add-row-btn" onclick="addExamRow()">+ Add Exam</button>
+                </div>
+            </section>
+
+            <!-- Assignments View -->
+            <section id="assignments" class="view">
+                <header class="view-header">
+                    <h2>Assignment Tracker</h2>
+                </header>
+                <div class="tracker-table-container">
+                    <table class="tracker-table">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Task/Assignment</th>
+                                <th>Due Date</th>
+                                <th>Progress</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignment-list">
+                            <!-- JS populated rows -->
+                        </tbody>
+                    </table>
+                    <button class="add-row-btn" onclick="addAssignmentRow()">+ Add Assignment</button>
+                </div>
+            </section>
+
+            <!-- Habits View -->
+            <section id="habits" class="view">
+                <header class="view-header">
+                    <h2>Habit Tracker</h2>
+                    <p>Build routines that lead to success</p>
+                </header>
+                <div class="habit-grid" id="habit-container">
+                    <!-- JS populated habits -->
+                </div>
+                <button class="add-row-btn mt-4" style="margin-top:20px;" onclick="addHabit()">+ Add New Habit</button>
+            </section>
+
+            <!-- Goals View -->
+            <section id="goals" class="view">
+                <header class="view-header">
+                    <h2>Goal Setting</h2>
+                    <p>Define your academic and personal success</p>
+                </header>
+                <div class="goals-grid">
+                    <div class="goal-box">
+                        <h3>Academic Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter academic goals...">
+                        </div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Personal Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter personal goals...">
+                        </div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Career/Future Goals</h3>
+                        <div class="editable-content" contenteditable="true" placeholder="Enter career goals..."></div>
+                    </div>
+                    <div class="goal-box">
+                        <h3>Action Plan</h3>
+                        <div class="editable-content" contenteditable="true"
+                            placeholder="Steps to achieve these goals..."></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vision Board View -->
+            <section id="vision" class="view">
+                <header class="view-header">
+                    <h2>Vision Board</h2>
+                    <p>Inspiration for 2026</p>
+                </header>
+                <div class="vision-board">
+                    <div class="vision-instruction">
+                        <i data-feather="image"
+                            style="width: 48px; height: 48px; color: var(--text-light); margin-bottom:15px;"></i>
+                        <p>Click here to customize your vision board.</p>
+                        <span class="subtext">You can add images via URL in edit mode.</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notes View -->
+            <section id="notes" class="view">
+                <header class="view-header">
+                    <h2>Notes</h2>
+                </header>
+                <div class="notes-container">
+                    <textarea class="notes-area" id="main-notes"
+                        placeholder="Jot down your thoughts, lecture summaries, or meeting notes here..."></textarea>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize Feather Icons
+        feather.replace();
+    </script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('SW registered with scope:', registration.scope);
+                }).catch(err => {
+                    console.error('SW registration failed:', err);
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>
